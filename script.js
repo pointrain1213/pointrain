@@ -1,19 +1,20 @@
-﻿				@charset "utf-8";
-				// ============================================================
-        //  Data Layer
+﻿// ============================================================
+        // 配置
         // ============================================================
-        const STORAGE_KEY = 'finance_app_records';
+        const API_BASE = 'http://localhost:3000/api'; // 后端地址
 
-        let records = [];
-        let currentFilter = 'today'; // 'today' | 'week' | 'month' | 'year' | 'all' | 'custom'
-        let customStart = '';
-        let customEnd = '';
+        // ============================================================
+        // 状态
+        // ============================================================
+        let currentType = 'income';
+        let currentFilter = 'today';
+        let categories = { income: [], expense: [] };
+        let transactions = [];
+        let stats = { income: 0, expense: 0, profit: 0, totalCount: 0 };
 
-        // 分类映射
-        const INCOME_CATEGORIES = ['工资', '奖金', '兼职', '投资收益', '其他收入'];
-        const EXPENSE_CATEGORIES = ['餐饮', '交通', '购物', '娱乐', '住房', '医疗', '教育', '其他支出'];
-
-        // DOM refs
+        // ============================================================
+        // DOM 引用
+        // ============================================================
         const form = document.getElementById('recordForm');
         const typeToggle = document.getElementById('typeToggle');
         const categorySelect = document.getElementById('category');
@@ -34,44 +35,12 @@
         const filterStart = document.getElementById('filterStart');
         const filterEnd = document.getElementById('filterEnd');
         const applyCustom = document.getElementById('applyCustomFilter');
-
-        let currentType = 'income'; // 'income' | 'expense'
-
-        // ============================================================
-        //  Init
-        // ============================================================
-        function init() {
-            loadRecords();
-            setupDateDefaults();
-            setupEventListeners();
-            updateUI();
-        }
-
-        function loadRecords() {
-            try {
-                const data = localStorage.getItem(STORAGE_KEY);
-                records = data ? JSON.parse(data) : [];
-            } catch {
-                records = [];
-            }
-        }
-
-        function saveRecords() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-        }
-
-        function setupDateDefaults() {
-            const today = new Date();
-            dateInput.value = formatDate(today);
-            // 设置自定义日期默认本月
-            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            filterStart.value = formatDate(firstDay);
-            filterEnd.value = formatDate(lastDay);
-        }
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const toastEl = document.getElementById('toast');
 
         // ============================================================
-        //  Helpers
+        // 工具函数
         // ============================================================
         function formatDate(date) {
             const y = date.getFullYear();
@@ -81,12 +50,16 @@
         }
 
         function formatCurrency(n) {
-            return '￥' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            return '¥' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
         }
 
-        function parseDate(str) {
-            const [y, m, d] = str.split('-').map(Number);
-            return new Date(y, m - 1, d);
+        function showToast(msg, duration = 2500) {
+            toastEl.textContent = msg;
+            toastEl.classList.add('show');
+            clearTimeout(toastEl._timer);
+            toastEl._timer = setTimeout(() => {
+                toastEl.classList.remove('show');
+            }, duration);
         }
 
         function getTodayStr() {
@@ -131,188 +104,274 @@
                 case 'all':
                     return { start: null, end: null };
                 case 'custom':
-                    return { start: customStart || filterStart.value, end: customEnd || filterEnd.value };
+                    return { start: filterStart.value || null, end: filterEnd.value || null };
                 default:
                     return { start: null, end: null };
             }
         }
 
-        function isInRange(dateStr, range) {
-            if (!range.start && !range.end) return true;
-            if (!range.start) return dateStr <= range.end;
-            if (!range.end) return dateStr >= range.start;
-            return dateStr >= range.start && dateStr <= range.end;
-        }
-
-        function getFilteredRecords() {
-            const range = getFilterRange();
-            return records.filter(r => isInRange(r.date, range));
-        }
-
-        function generateId() {
-            return Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-        }
-
-        // ============================================================
-        //  Business Logic
-        // ============================================================
-        function addRecord(type, category, amount, date, note) {
-            const record = {
-                id: generateId(),
-                type,
-                category,
-                amount: parseFloat(amount),
-                date,
-                note: note.trim() || '',
-                createdAt: Date.now()
-            };
-            records.push(record);
-            saveRecords();
-            return record;
-        }
-
-        function deleteRecord(id) {
-            records = records.filter(r => r.id !== id);
-            saveRecords();
-        }
-
-        function getStats(filtered) {
-            let income = 0,
-                expense = 0;
-            filtered.forEach(r => {
-                if (r.type === 'income') income += r.amount;
-                else expense += r.amount;
+        function buildQueryString(params) {
+            const parts = [];
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== null && value !== undefined && value !== '') {
+                    parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+                }
             });
-            return { income, expense, profit: income - expense };
+            return parts.length ? '?' + parts.join('&') : '';
         }
 
         // ============================================================
-        //  Chart Rendering
+        // API 调用
         // ============================================================
-        function renderChart(filtered) {
-            const range = getFilterRange();
-            if (!range.start && !range.end) {
-                // 全部：按月汇总
-                renderChartByMonth(filtered);
+        async function apiGet(endpoint, params = {}) {
+            const qs = buildQueryString(params);
+            const response = await fetch(`${API_BASE}${endpoint}${qs}`);
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || `HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
+        async function apiPost(endpoint, data) {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || `HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
+        async function apiDelete(endpoint) {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                method: 'DELETE'
+            });
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || `HTTP ${response.status}`);
+            }
+            return response.json();
+        }
+
+        // ============================================================
+        // 数据加载
+        // ============================================================
+        async function loadCategories() {
+            try {
+                const [incomeRes, expenseRes] = await Promise.all([
+                    apiGet('/categories', { type: 'income' }),
+                    apiGet('/categories', { type: 'expense' })
+                ]);
+                categories.income = incomeRes.data || [];
+                categories.expense = expenseRes.data || [];
+                updateCategorySelect();
+                return true;
+            } catch (err) {
+                console.error('加载分类失败:', err);
+                showToast('⚠️ 加载分类失败: ' + err.message);
+                return false;
+            }
+        }
+
+        function updateCategorySelect() {
+            const list = currentType === 'income' ? categories.income : categories.expense;
+            if (list.length === 0) {
+                categorySelect.innerHTML = '<option value="">暂无分类</option>';
                 return;
             }
-            // 计算天数差
-            const start = parseDate(range.start);
-            const end = parseDate(range.end);
-            const diffDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+            categorySelect.innerHTML = list.map(c =>
+                `<option value="${c.id}">${c.name}</option>`
+            ).join('');
+        }
 
-            if (diffDays > 45) {
-                renderChartByMonth(filtered);
-            } else {
-                renderChartByDay(filtered, start, end, diffDays);
+        async function loadData() {
+            const range = getFilterRange();
+            try {
+                const [transRes, statsRes] = await Promise.all([
+                    apiGet('/transactions', {
+                        start_date: range.start,
+                        end_date: range.end
+                    }),
+                    apiGet('/stats', {
+                        start_date: range.start,
+                        end_date: range.end
+                    })
+                ]);
+
+                transactions = transRes.data || [];
+                stats = statsRes.data || { income: 0, expense: 0, profit: 0, totalCount: 0 };
+
+                updateUI();
+                return true;
+            } catch (err) {
+                console.error('加载数据失败:', err);
+                showToast('⚠️ 加载数据失败: ' + err.message);
+                return false;
             }
         }
 
-       function renderChartByDay(filtered, start, end, diffDays) {
-				    const canvas = chartCanvas;
-				    const ctx = canvas.getContext('2d');
-				    const dpr = window.devicePixelRatio || 1;
-				    
-				    // 优化：直接使用 CSS 样式尺寸，如果获取不到则使用默认值
-				    const displayWidth = chartWrapper.clientWidth || 600;
-				    const displayHeight = chartWrapper.clientHeight || 200;
-				    
-				    canvas.style.width = displayWidth + 'px';
-				    canvas.style.height = displayHeight + 'px';
-				    canvas.width = displayWidth * dpr;
-				    canvas.height = displayHeight * dpr;
-				    ctx.scale(dpr, dpr);
-				
-				    // 生成日期序列
-				    const days = [];
-				    for (let i = 0; i < diffDays; i++) {
-				        const d = new Date(start);
-				        d.setDate(start.getDate() + i);
-				        days.push(formatDate(d));
-				    }
-				
-				    // 汇总每天数据
-				    const map = {};
-				    filtered.forEach(r => {
-				        if (!map[r.date]) map[r.date] = { income: 0, expense: 0 };
-				        if (r.type === 'income') map[r.date].income += r.amount;
-				        else map[r.date].expense += r.amount;
-				    });
-				
-				    const data = days.map(d => ({ 
-				        date: d, 
-				        income: map[d] ? map[d].income : 0, 
-				        expense: map[d] ? map[d].expense : 0 
-				    }));
-				    
-				    drawBarChart(ctx, displayWidth, displayHeight, data, 'day');
-				}
+        async function loadChartData() {
+            const range = getFilterRange();
+            const diffDays = range.start && range.end ?
+                Math.round((new Date(range.end) - new Date(range.start)) / (1000 * 60 * 60 * 24)) + 1 :
+                0;
+            const groupBy = diffDays > 45 ? 'month' : 'day';
 
-        function renderChartByMonth(filtered) {
-				    const canvas = chartCanvas;
-				    const ctx = canvas.getContext('2d');
-				    const dpr = window.devicePixelRatio || 1;
-				    
-				    // 优化：直接使用 CSS 样式尺寸
-				    const displayWidth = chartWrapper.clientWidth || 600;
-				    const displayHeight = chartWrapper.clientHeight || 200;
-				
-				    canvas.style.width = displayWidth + 'px';
-				    canvas.style.height = displayHeight + 'px';
-				    canvas.width = displayWidth * dpr;
-				    canvas.height = displayHeight * dpr;
-				    ctx.scale(dpr, dpr);
-				
-				    // 按年月汇总
-				    const map = {};
-				    filtered.forEach(r => {
-				        const key = r.date.slice(0, 7);
-				        if (!map[key]) map[key] = { income: 0, expense: 0 };
-				        if (r.type === 'income') map[key].income += r.amount;
-				        else map[key].expense += r.amount;
-				    });
-				
-				    const keys = Object.keys(map).sort();
-				    const data = keys.map(k => ({ 
-				        date: k, 
-				        income: map[k].income, 
-				        expense: map[k].expense 
-				    }));
-				    
-				    if (data.length === 0) {
-				        showChartEmpty(true);
-				        return;
-				    }
-				    
-				    showChartEmpty(false);
-				    drawBarChart(ctx, displayWidth, displayHeight, data, 'month');
-				}
+            try {
+                const res = await apiGet('/chart-data', {
+                    start_date: range.start,
+                    end_date: range.end,
+                    group_by: groupBy
+                });
+                renderChart(res.data || [], groupBy);
+            } catch (err) {
+                console.error('加载图表数据失败:', err);
+                showToast('⚠️ 加载图表失败');
+            }
+        }
 
-        function drawBarChart(ctx, W, H, data, mode) {
-            const pad = { top: 20, bottom: 28, left: 10, right: 10 };
+        // ============================================================
+        // UI 更新
+        // ============================================================
+        function updateUI() {
+            // Stats
+            totalIncomeEl.textContent = formatCurrency(stats.income);
+            totalExpenseEl.textContent = formatCurrency(stats.expense);
+            totalProfitEl.textContent = formatCurrency(stats.profit);
+            totalProfitEl.className = 'value profit' + (stats.profit < 0 ? ' negative' : '');
+
+            // Counts
+            recordCountEl.textContent = stats.totalCount + ' 笔记录';
+            listCountEl.textContent = transactions.length + ' 条';
+
+            // Period label
+            const periodMap = {
+                'today': '今日',
+                'week': '本周',
+                'month': '本月',
+                'year': '本年',
+                'all': '全部',
+                'custom': '自定义'
+            };
+            chartPeriodLabel.textContent = periodMap[currentFilter] || '自定义';
+
+            // Record list
+            renderRecordList();
+
+            // Chart
+            loadChartData();
+        }
+
+        function renderRecordList() {
+            if (transactions.length === 0) {
+                recordListEl.innerHTML = `
+                    <div class="record-empty">
+                        <span class="big-icon">📭</span>
+                        还没有记录，快来添加第一笔吧！
+                    </div>
+                `;
+                return;
+            }
+
+            const sorted = [...transactions].sort((a, b) =>
+                b.transaction_date.localeCompare(a.transaction_date) ||
+                new Date(b.created_at) - new Date(a.created_at)
+            );
+
+            let html = '';
+            sorted.forEach(t => {
+                const isIncome = t.category_type === 'income';
+                const badge = isIncome ? 'income' : 'expense';
+                const icon = isIncome ? '📈' : '📉';
+                const amountClass = isIncome ? 'income' : 'expense';
+                const amtSign = isIncome ? '+' : '-';
+                const note = t.description || '';
+                html += `
+                    <div class="record-item" data-id="${t.id}">
+                        <div class="type-badge ${badge}">${icon}</div>
+                        <div class="info">
+                            <div class="top">
+                                <span class="category">${t.category_name || '未分类'}</span>
+                                <span class="date">${t.transaction_date}</span>
+                            </div>
+                            ${note ? `<div class="note">${escapeHtml(note)}</div>` : ''}
+                        </div>
+                        <div class="amount ${amountClass}">${amtSign}${formatCurrency(t.amount).replace('¥', '')}</div>
+                        <button class="delete-btn" data-id="${t.id}" title="删除">✕</button>
+                    </div>
+                `;
+            });
+            recordListEl.innerHTML = html;
+
+            recordListEl.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const id = btn.dataset.id;
+                    if (!confirm('确定要删除这笔记录吗？')) return;
+                    try {
+                        await apiDelete(`/transactions/${id}`);
+                        showToast('✅ 删除成功');
+                        await loadData();
+                    } catch (err) {
+                        showToast('⚠️ 删除失败: ' + err.message);
+                    }
+                });
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================================
+        // 图表渲染 (Canvas)
+        // ============================================================
+        function renderChart(data, groupBy) {
+            const canvas = chartCanvas;
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            const rect = chartWrapper.getBoundingClientRect();
+            const W = rect.width || 600;
+            const H = rect.height || 200;
+
+            canvas.style.width = W + 'px';
+            canvas.style.height = H + 'px';
+            canvas.width = W * dpr;
+            canvas.height = H * dpr;
+            ctx.scale(dpr, dpr);
+
+            if (!data || data.length === 0) {
+                chartEmpty.style.display = 'flex';
+                canvas.style.display = 'none';
+                return;
+            }
+
+            chartEmpty.style.display = 'none';
+            canvas.style.display = 'block';
+
+            const pad = { top: 24, bottom: 30, left: 10, right: 10 };
             const chartW = W - pad.left - pad.right;
             const chartH = H - pad.top - pad.bottom;
             const count = data.length;
 
-            if (count === 0) {
-                showChartEmpty(true);
-                return;
-            }
-
-            // 计算最大值
             let maxVal = 0;
             data.forEach(d => {
-                maxVal = Math.max(maxVal, d.income, d.expense);
+                maxVal = Math.max(maxVal, d.income || 0, d.expense || 0);
             });
             maxVal = maxVal * 1.15 || 1;
 
-            const barGap = Math.max(2, chartW / count * 0.2);
+            const barGap = Math.max(2, chartW / count * 0.25);
             const barWidth = Math.max(4, (chartW - barGap * (count + 1)) / count);
-            const groupGap = barGap;
 
             ctx.clearRect(0, 0, W, H);
 
-            // 背景线
+            // 背景网格
             ctx.strokeStyle = '#E8ECF0';
             ctx.lineWidth = 0.5;
             for (let i = 0; i <= 4; i++) {
@@ -321,20 +380,18 @@
                 ctx.moveTo(pad.left, y);
                 ctx.lineTo(W - pad.right, y);
                 ctx.stroke();
-                // 刻度值
                 ctx.fillStyle = '#94A3B8';
                 ctx.font = '9px sans-serif';
                 ctx.textAlign = 'right';
                 ctx.fillText(formatCurrency(maxVal * (1 - i / 4)), pad.left - 4, y + 3);
             }
 
-            // 绘制柱状图
+            // 柱状图
             data.forEach((d, idx) => {
-                const x = pad.left + groupGap + idx * (barWidth + groupGap);
-                const incomeH = (d.income / maxVal) * chartH;
-                const expenseH = (d.expense / maxVal) * chartH;
+                const x = pad.left + barGap + idx * (barWidth + barGap);
+                const incomeH = ((d.income || 0) / maxVal) * chartH;
+                const expenseH = ((d.expense || 0) / maxVal) * chartH;
 
-                // 支出柱 (红色)
                 if (d.expense > 0) {
                     const ex = x;
                     const ey = pad.top + chartH - expenseH;
@@ -345,7 +402,6 @@
                     ctx.fill();
                 }
 
-                // 收入柱 (绿色)
                 if (d.income > 0) {
                     const ix = x + barWidth / 2 + 1;
                     const iy = pad.top + chartH - incomeH;
@@ -361,12 +417,9 @@
                 ctx.font = '9px sans-serif';
                 ctx.textAlign = 'center';
                 let label = d.date;
-                if (mode === 'day') {
-                    label = d.date.slice(5); // MM-DD
-                } else {
-                    label = d.date; // YYYY-MM
+                if (groupBy === 'day') {
+                    label = d.date.slice(5);
                 }
-                // 每隔几个显示，防止重叠
                 const step = Math.max(1, Math.floor(count / 12));
                 if (idx % step === 0 || idx === count - 1) {
                     ctx.fillText(label, x + barWidth / 2, H - 4);
@@ -383,12 +436,10 @@
             ctx.fillStyle = '#EF4444';
             ctx.fillRect(W - 28, 8, 10, 10);
             ctx.fillStyle = '#1E293B';
-            ctx.fillText('支出', W - 14, 17,-4);
-
-            showChartEmpty(false);
+            ctx.fillText('支出', W - 14, 17);
         }
 
-        // roundRect polyfill for Canvas
+        // roundRect polyfill
         if (!CanvasRenderingContext2D.prototype.roundRect) {
             CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
                 const r = Array.isArray(radii) ? radii : [radii, radii, radii, radii];
@@ -407,166 +458,62 @@
             };
         }
 
-        function showChartEmpty(empty) {
-            if (empty) {
-                chartEmpty.style.display = 'flex';
-                chartCanvas.style.display = 'none';
-            } else {
-                chartEmpty.style.display = 'none';
-                chartCanvas.style.display = 'block';
-            }
-        }
-
         // ============================================================
-        //  UI Update
-        // ============================================================
-        function updateUI() {
-            const filtered = getFilteredRecords();
-            const stats = getStats(filtered);
-            const range = getFilterRange();
-
-            // Stats
-            totalIncomeEl.textContent = formatCurrency(stats.income);
-            totalExpenseEl.textContent = formatCurrency(stats.expense);
-            const profitEl = totalProfitEl;
-            profitEl.textContent = formatCurrency(stats.profit);
-            profitEl.className = 'value profit' + (stats.profit < 0 ? ' negative' : '');
-
-            // Counts
-            const total = records.length;
-            recordCountEl.textContent = total + ' 笔记录';
-            listCountEl.textContent = filtered.length + ' 条';
-
-            // Period label
-            if (currentFilter === 'today') chartPeriodLabel.textContent = '今日';
-            else if (currentFilter === 'week') chartPeriodLabel.textContent = '本周';
-            else if (currentFilter === 'month') chartPeriodLabel.textContent = '本月';
-            else if (currentFilter === 'year') chartPeriodLabel.textContent = '本年';
-            else if (currentFilter === 'all') chartPeriodLabel.textContent = '全部';
-            else chartPeriodLabel.textContent = '自定义';
-
-            // Record list
-            renderRecordList(filtered);
-
-            // Chart
-            renderChart(filtered);
-        }
-
-        function renderRecordList(filtered) {
-            if (filtered.length === 0) {
-                recordListEl.innerHTML = `
-                    <div class="record-empty">
-                        <span class="big-icon">??</span>
-                        还没有记录，快来添加第一笔吧！
-                    </div>
-                `;
-                return;
-            }
-
-            // 按日期倒序
-            const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
-
-            let html = '';
-            sorted.forEach(r => {
-                const isIncome = r.type === 'income';
-                const badge = isIncome ? 'income' : 'expense';
-                const icon = isIncome ? '??' : '??';
-                const amountClass = isIncome ? 'income' : 'expense';
-                const amtSign = isIncome ? '+' : '-';
-                html += `
-                    <div class="record-item" data-id="${r.id}">
-                        <div class="type-badge ${badge}">${icon}</div>
-                        <div class="info">
-                            <div class="top">
-                                <span class="category">${r.category}</span>
-                                <span class="date">${r.date}</span>
-                            </div>
-                            ${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ''}
-                        </div>
-                        <div class="amount ${amountClass}">${amtSign}${formatCurrency(r.amount).replace('￥', '')}</div>
-                        <button class="delete-btn" data-id="${r.id}" title="删除">?</button>
-                    </div>
-                `;
-            });
-            recordListEl.innerHTML = html;
-
-            // 绑定删除事件
-            recordListEl.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const id = btn.dataset.id;
-                    if (confirm('确定要删除这笔记录吗？')) {
-                        deleteRecord(id);
-                        updateUI();
-                    }
-                });
-            });
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // ============================================================
-        //  Event Listeners
+        // 事件绑定
         // ============================================================
         function setupEventListeners() {
-            // Type toggle
+            // 类型切换
             typeToggle.querySelectorAll('button').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    typeToggle.querySelectorAll('button').forEach(b => {
-                        b.className = '';
-                    });
+                    typeToggle.querySelectorAll('button').forEach(b => { b.className = ''; });
                     const type = btn.dataset.type;
                     currentType = type;
-                    if (type === 'income') {
-                        btn.className = 'active-income';
-                        // 切换分类选项
-                        categorySelect.innerHTML = INCOME_CATEGORIES.map(c => `<option value="${c}">${c}</option>`)
-                            .join('');
-                    } else {
-                        btn.className = 'active-expense';
-                        categorySelect.innerHTML = EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`)
-                            .join('');
-                    }
+                    btn.className = type === 'income' ? 'active-income' : 'active-expense';
+                    updateCategorySelect();
                 });
             });
 
-            // Form submit
-            form.addEventListener('submit', (e) => {
+            // 表单提交
+            form.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const type = currentType;
-                const category = categorySelect.value;
+                const category_id = categorySelect.value;
                 const amount = amountInput.value.trim();
-                const date = dateInput.value;
-                const note = noteInput.value.trim();
+                const transaction_date = dateInput.value;
+                const description = noteInput.value.trim();
 
+                if (!category_id) {
+                    showToast('⚠️ 请选择分类');
+                    return;
+                }
                 if (!amount || parseFloat(amount) <= 0) {
-                    alert('请输入有效的金额');
+                    showToast('⚠️ 请输入有效金额');
                     amountInput.focus();
                     return;
                 }
-                if (!date) {
-                    alert('请选择日期');
+                if (!transaction_date) {
+                    showToast('⚠️ 请选择日期');
                     dateInput.focus();
                     return;
                 }
 
-                addRecord(type, category, amount, date, note);
-                // 重置表单
-                amountInput.value = '';
-                noteInput.value = '';
-                dateInput.value = getTodayStr();
-                // 默认选中第一个分类
-                categorySelect.selectedIndex = 0;
-                updateUI();
-                // 滚动到列表
-                document.querySelector('.card:last-child').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                try {
+                    const result = await apiPost('/transactions', {
+                        category_id: parseInt(category_id),
+                        amount: parseFloat(amount),
+                        transaction_date,
+                        description: description || null
+                    });
+                    showToast('✅ 添加成功');
+                    amountInput.value = '';
+                    noteInput.value = '';
+                    dateInput.value = getTodayStr();
+                    await loadData();
+                } catch (err) {
+                    showToast('⚠️ 添加失败: ' + err.message);
+                }
             });
 
-            // Filter buttons
+            // 筛选按钮
             filterBtns.forEach(btn => {
                 btn.addEventListener('click', () => {
                     filterBtns.forEach(b => b.classList.remove('active'));
@@ -574,48 +521,74 @@
                     currentFilter = btn.dataset.period;
                     if (currentFilter === 'custom') {
                         // 使用自定义日期
-                        currentFilter = 'custom';
-                        customStart = filterStart.value;
-                        customEnd = filterEnd.value;
                     } else {
-                        // 更新自定义输入框为当前范围
                         const range = getFilterRange();
                         if (range.start) filterStart.value = range.start;
                         if (range.end) filterEnd.value = range.end;
                     }
-                    updateUI();
+                    loadData();
                 });
             });
 
-            // Apply custom filter
+            // 自定义筛选
             applyCustom.addEventListener('click', () => {
                 if (!filterStart.value || !filterEnd.value) {
-                    alert('请选择开始和结束日期');
+                    showToast('⚠️ 请选择开始和结束日期');
                     return;
                 }
                 if (filterStart.value > filterEnd.value) {
-                    alert('开始日期不能晚于结束日期');
+                    showToast('⚠️ 开始日期不能晚于结束日期');
                     return;
                 }
-                // 切换到自定义模式
                 filterBtns.forEach(b => b.classList.remove('active'));
                 currentFilter = 'custom';
-                customStart = filterStart.value;
-                customEnd = filterEnd.value;
-                updateUI();
+                loadData();
             });
+        }
+
+        // ============================================================
+        // 初始化
+        // ============================================================
+        async function init() {
+            // 设置日期默认值
+            const today = new Date();
+            dateInput.value = formatDate(today);
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            filterStart.value = formatDate(firstDay);
+            filterEnd.value = formatDate(lastDay);
+
+            setupEventListeners();
+
+            // 连接测试
+            try {
+                const healthRes = await apiGet('/health');
+                statusDot.className = 'dot online';
+                statusText.textContent = '已连接';
+            } catch (err) {
+                statusDot.className = 'dot offline';
+                statusText.textContent = '连接失败';
+                showToast('⚠️ 后端服务连接失败，请确保 server.js 已启动');
+            }
+
+            // 加载分类
+            const catLoaded = await loadCategories();
+            if (!catLoaded) {
+                showToast('⚠️ 无法加载分类数据，请检查数据库连接');
+            }
+
+            // 加载交易数据
+            await loadData();
 
             // 窗口resize重新绘制图表
             let resizeTimer;
             window.addEventListener('resize', () => {
                 clearTimeout(resizeTimer);
                 resizeTimer = setTimeout(() => {
-                    updateUI();
-                }, 200);
+                    if (transactions.length > 0) loadChartData();
+                }, 300);
             });
         }
 
-        // ============================================================
-        //  Start
-        // ============================================================
+        // 启动
         init();
