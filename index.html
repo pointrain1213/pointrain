@@ -1,0 +1,1320 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>财务记账本</title>
+    <style>
+        /* ===== CSS Variables ===== */
+        :root {
+            --primary: #4A6CF7;
+            --primary-light: #6B8AFF;
+            --primary-dark: #3458D6;
+            --income: #22C55E;
+            --income-bg: #ECFDF5;
+            --expense: #EF4444;
+            --expense-bg: #FEF2F2;
+            --bg: #F0F4F8;
+            --card-bg: #ffffff;
+            --text: #1E293B;
+            --text-secondary: #64748B;
+            --text-light: #94A3B8;
+            --border: #E2E8F0;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+            --radius: 16px;
+            --radius-sm: 10px;
+            --transition: 0.25s ease;
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        /* ===== Reset & Global ===== */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 20px 16px 40px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+        }
+
+        #app {
+            max-width: 820px;
+            width: 100%;
+        }
+
+        /* ===== Scrollbar ===== */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 12px;
+        }
+
+        /* ===== Typography ===== */
+        h1,
+        h2,
+        h3 {
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+
+        /* ===== Header ===== */
+        .app-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 4px 0;
+        }
+        .app-header .logo {
+            font-size: 32px;
+            line-height: 1;
+        }
+        .app-header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .app-header .sub {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-left: auto;
+            background: var(--card-bg);
+            padding: 4px 14px;
+            border-radius: 30px;
+            box-shadow: var(--shadow);
+            white-space: nowrap;
+        }
+
+        /* ===== Cards ===== */
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 20px 22px;
+            margin-bottom: 18px;
+            transition: box-shadow var(--transition);
+        }
+        .card:hover {
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.3px;
+        }
+        .card-header .icon {
+            font-size: 20px;
+            margin-right: 8px;
+        }
+
+        /* ===== Stats ===== */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: var(--radius-sm);
+            padding: 18px 14px 14px;
+            text-align: center;
+            box-shadow: var(--shadow);
+            transition: transform var(--transition);
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        .stat-card .label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-card .value {
+            font-size: 26px;
+            font-weight: 700;
+            margin-top: 4px;
+            letter-spacing: -0.5px;
+        }
+        .stat-card .value.income {
+            color: var(--income);
+        }
+        .stat-card .value.expense {
+            color: var(--expense);
+        }
+        .stat-card .value.profit {
+            color: var(--primary);
+        }
+        .stat-card .value.profit.negative {
+            color: var(--expense);
+        }
+
+        /* ===== Filter ===== */
+        .filter-section {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 10px;
+        }
+        .filter-btn {
+            padding: 6px 18px;
+            border: none;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 500;
+            background: var(--border);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+        .filter-btn:hover {
+            background: #d1d9e6;
+        }
+        .filter-btn.active {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(74, 108, 247, 0.35);
+        }
+        .filter-custom {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: auto;
+            flex-wrap: wrap;
+        }
+        .filter-custom label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .filter-custom input[type="date"] {
+            padding: 5px 10px;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            font-size: 13px;
+            background: var(--card-bg);
+            color: var(--text);
+            outline: none;
+            transition: border var(--transition);
+        }
+        .filter-custom input[type="date"]:focus {
+            border-color: var(--primary);
+        }
+        .filter-custom .apply-btn {
+            padding: 5px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            background: var(--primary);
+            color: #fff;
+            cursor: pointer;
+            transition: background var(--transition);
+        }
+        .filter-custom .apply-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        /* ===== Form ===== */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px 16px;
+        }
+        .form-grid .full-width {
+            grid-column: 1 / -1;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.3px;
+        }
+        .form-group select,
+        .form-group input,
+        .form-group textarea {
+            padding: 10px 12px;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            background: var(--card-bg);
+            color: var(--text);
+            outline: none;
+            transition: border var(--transition), box-shadow var(--transition);
+            font-family: inherit;
+        }
+        .form-group select:focus,
+        .form-group input:focus,
+        .form-group textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.12);
+        }
+        .form-group textarea {
+            resize: vertical;
+            min-height: 52px;
+        }
+        .form-group .type-toggle {
+            display: flex;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            border: 1.5px solid var(--border);
+        }
+        .form-group .type-toggle button {
+            flex: 1;
+            padding: 9px 0;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition);
+            background: var(--card-bg);
+            color: var(--text-secondary);
+        }
+        .form-group .type-toggle button.active-income {
+            background: var(--income);
+            color: #fff;
+        }
+        .form-group .type-toggle button.active-expense {
+            background: var(--expense);
+            color: #fff;
+        }
+        .submit-btn {
+            grid-column: 1 / -1;
+            padding: 12px 0;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 15px;
+            font-weight: 600;
+            background: var(--primary);
+            color: #fff;
+            cursor: pointer;
+            transition: background var(--transition), transform var(--transition);
+        }
+        .submit-btn:hover {
+            background: var(--primary-dark);
+            transform: scale(1.01);
+        }
+        .submit-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* ===== Chart ===== */
+        .chart-wrapper {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            margin-top: 4px;
+        }
+        .chart-wrapper canvas {
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 8px;
+        }
+        .chart-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: var(--text-light);
+            font-size: 14px;
+            background: #fafbfc;
+            border-radius: 8px;
+            border: 1px dashed var(--border);
+        }
+
+        /* ===== Record List ===== */
+        .record-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+        .record-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            background: #fafbfc;
+            border-radius: var(--radius-sm);
+            transition: background var(--transition);
+            position: relative;
+        }
+        .record-item:hover {
+            background: #f1f5f9;
+        }
+        .record-item .type-badge {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .record-item .type-badge.income {
+            background: var(--income-bg);
+            color: var(--income);
+        }
+        .record-item .type-badge.expense {
+            background: var(--expense-bg);
+            color: var(--expense);
+        }
+        .record-item .info {
+            flex: 1;
+            min-width: 0;
+        }
+        .record-item .info .top {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .record-item .info .top .category {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .record-item .info .top .date {
+            font-size: 12px;
+            color: var(--text-light);
+        }
+        .record-item .info .note {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 200px;
+        }
+        .record-item .amount {
+            font-weight: 700;
+            font-size: 16px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .record-item .amount.income {
+            color: var(--income);
+        }
+        .record-item .amount.expense {
+            color: var(--expense);
+        }
+        .record-item .delete-btn {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 6px;
+            transition: all var(--transition);
+            opacity: 0.4;
+            flex-shrink: 0;
+        }
+        .record-item .delete-btn:hover {
+            opacity: 1;
+            color: var(--expense);
+            background: var(--expense-bg);
+        }
+        .record-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-light);
+            font-size: 14px;
+        }
+        .record-empty .big-icon {
+            font-size: 48px;
+            display: block;
+            margin-bottom: 12px;
+        }
+
+        /* ===== Responsive ===== */
+        @media (max-width: 640px) {
+            body {
+                padding: 12px 10px 30px;
+            }
+            .card {
+                padding: 16px 14px;
+                border-radius: 14px;
+            }
+            .stats-grid {
+                gap: 8px;
+            }
+            .stat-card {
+                padding: 14px 8px 12px;
+            }
+            .stat-card .value {
+                font-size: 20px;
+            }
+            .form-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            .form-grid .full-width {
+                grid-column: 1;
+            }
+            .filter-section {
+                gap: 6px;
+            }
+            .filter-btn {
+                padding: 5px 14px;
+                font-size: 12px;
+            }
+            .filter-custom {
+                margin-left: 0;
+                width: 100%;
+                margin-top: 4px;
+            }
+            .filter-custom input[type="date"] {
+                flex: 1;
+                min-width: 0;
+            }
+            .app-header h1 {
+                font-size: 18px;
+            }
+            .app-header .sub {
+                font-size: 11px;
+                padding: 2px 10px;
+            }
+            .record-item {
+                padding: 10px 10px;
+                gap: 8px;
+            }
+            .record-item .info .note {
+                max-width: 120px;
+            }
+            .chart-wrapper {
+                height: 150px;
+            }
+        }
+
+        @media (min-width: 641px) and (max-width: 900px) {
+            .form-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        /* ===== Animations ===== */
+        @keyframes fadeSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .record-item {
+            animation: fadeSlideUp 0.25s ease;
+        }
+        .stat-card {
+            animation: fadeSlideUp 0.3s ease;
+        }
+
+        /* ===== Utility ===== */
+        .text-center {
+            text-align: center;
+        }
+        .mt-4 {
+            margin-top: 4px;
+        }
+        .gap-2 {
+            gap: 8px;
+        }
+        .flex-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <!-- ===== Header ===== -->
+        <header class="app-header">
+            <span class="logo"></span>
+            <h1>财务记账本</h1>
+            <span class="sub" id="recordCount">0 笔记录</span>
+        </header>
+
+        <!-- ===== Stats ===== -->
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="label">总收入</div>
+                <div class="value income" id="totalIncome">￥0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">总支出</div>
+                <div class="value expense" id="totalExpense">￥0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">净盈亏</div>
+                <div class="value profit" id="totalProfit">￥0.00</div>
+            </div>
+        </div>
+
+        <!-- ===== Filter ===== -->
+        <div class="card">
+            <div class="card-header">
+                <span><span class="icon"></span>时间筛选</span>
+            </div>
+            <div class="filter-section">
+                <button class="filter-btn active" data-period="today">今日</button>
+                <button class="filter-btn" data-period="week">本周</button>
+                <button class="filter-btn" data-period="month">本月</button>
+                <button class="filter-btn" data-period="year">本年</button>
+                <button class="filter-btn" data-period="all">全部</button>
+                <div class="filter-custom">
+                    <label>自</label>
+                    <input type="date" id="filterStart" />
+                    <label>至</label>
+                    <input type="date" id="filterEnd" />
+                    <button class="apply-btn" id="applyCustomFilter">筛选</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Add Record Form ===== -->
+        <div class="card">
+            <div class="card-header">
+                <span><span class="icon"></span>添加记录</span>
+            </div>
+            <form id="recordForm" class="form-grid">
+                <!-- Type Toggle -->
+                <div class="form-group full-width">
+                    <label>类型</label>
+                    <div class="type-toggle" id="typeToggle">
+                        <button type="button" class="active-income" data-type="income">收入</button>
+                        <button type="button" data-type="expense"> 支出</button>
+                    </div>
+                </div>
+
+                <!-- Category -->
+                <div class="form-group">
+                    <label for="category">分类</label>
+                    <select id="category" required>
+                        <option value="工资">工资</option>
+                        <option value="奖金">奖金</option>
+                        <option value="兼职">兼职</option>
+                        <option value="投资收益">投资收益</option>
+                        <option value="其他收入">其他收入</option>
+                    </select>
+                </div>
+
+                <!-- Amount -->
+                <div class="form-group">
+                    <label for="amount">金额 (￥)</label>
+                    <input type="number" id="amount" placeholder="0.00" min="0.01" step="0.01" required />
+                </div>
+
+                <!-- Date -->
+                <div class="form-group">
+                    <label for="date">日期</label>
+                    <input type="date" id="date" required />
+                </div>
+
+                <!-- Note -->
+                <div class="form-group full-width">
+                    <label for="note">备注 (选填)</label>
+                    <input type="text" id="note" placeholder="例如：午餐、工资条..." maxlength="50" />
+                </div>
+
+                <!-- Submit -->
+                <button type="submit" class="submit-btn">添加记录</button>
+            </form>
+        </div>
+
+        <!-- ===== Chart ===== -->
+        <div class="card">
+            <div class="card-header">
+                <span><span class="icon"></span>收支趋势</span>
+                <span style="font-size:12px;color:var(--text-light);" id="chartPeriodLabel">本月</span>
+            </div>
+            <div class="chart-wrapper" id="chartWrapper">
+                <canvas id="trendChart"></canvas>
+            </div>
+            <div class="chart-empty" id="chartEmpty" style="display:none;">
+                <span>暂无数据，添加记录后即可查看趋势</span>
+            </div>
+        </div>
+
+        <!-- ===== Record List ===== -->
+        <div class="card">
+            <div class="card-header">
+                <span><span class="icon"></span>记录明细</span>
+                <span style="font-size:12px;color:var(--text-light);" id="listCount">0 条</span>
+            </div>
+            <div class="record-list" id="recordList">
+                <!-- 动态渲染 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        //  Data Layer
+        // ============================================================
+        const STORAGE_KEY = 'finance_app_records';
+
+        let records = [];
+        let currentFilter = 'today'; // 'today' | 'week' | 'month' | 'year' | 'all' | 'custom'
+        let customStart = '';
+        let customEnd = '';
+
+        // 分类映射
+        const INCOME_CATEGORIES = ['工资', '奖金', '兼职', '投资收益', '其他收入'];
+        const EXPENSE_CATEGORIES = ['餐饮', '交通', '购物', '娱乐', '住房', '医疗', '教育', '其他支出'];
+
+        // DOM refs
+        const form = document.getElementById('recordForm');
+        const typeToggle = document.getElementById('typeToggle');
+        const categorySelect = document.getElementById('category');
+        const amountInput = document.getElementById('amount');
+        const dateInput = document.getElementById('date');
+        const noteInput = document.getElementById('note');
+        const recordListEl = document.getElementById('recordList');
+        const totalIncomeEl = document.getElementById('totalIncome');
+        const totalExpenseEl = document.getElementById('totalExpense');
+        const totalProfitEl = document.getElementById('totalProfit');
+        const recordCountEl = document.getElementById('recordCount');
+        const listCountEl = document.getElementById('listCount');
+        const chartPeriodLabel = document.getElementById('chartPeriodLabel');
+        const chartCanvas = document.getElementById('trendChart');
+        const chartEmpty = document.getElementById('chartEmpty');
+        const chartWrapper = document.getElementById('chartWrapper');
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        const filterStart = document.getElementById('filterStart');
+        const filterEnd = document.getElementById('filterEnd');
+        const applyCustom = document.getElementById('applyCustomFilter');
+
+        let currentType = 'income'; // 'income' | 'expense'
+
+        // ============================================================
+        //  Init
+        // ============================================================
+        function init() {
+            try {
+                loadRecords();
+                setupDateDefaults();
+                setupEventListeners();
+                updateUI();
+            } catch (error) {
+                console.error("初始化失败:", error);
+                alert("应用初始化失败，请刷新页面重试。");
+            }
+        }
+
+        function loadRecords() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                records = data ? JSON.parse(data) : [];
+            } catch {
+                records = [];
+            }
+        }
+
+        function saveRecords() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+            } catch (error) {
+                console.warn("保存记录失败:", error);
+            }
+        }
+
+        function setupDateDefaults() {
+            const today = new Date();
+            dateInput.value = formatDate(today);
+            // 设置自定义日期默认本月
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            filterStart.value = formatDate(firstDay);
+            filterEnd.value = formatDate(lastDay);
+        }
+
+        // ============================================================
+        //  Helpers
+        // ============================================================
+        function formatDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatCurrency(n) {
+            return '￥' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+
+        function parseDate(str) {
+            const [y, m, d] = str.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        }
+
+        function getTodayStr() {
+            return formatDate(new Date());
+        }
+
+        function getWeekRange() {
+            const now = new Date();
+            const day = now.getDay();
+            const diff = day === 0 ? 6 : day - 1;
+            const mon = new Date(now);
+            mon.setDate(now.getDate() - diff);
+            const sun = new Date(mon);
+            sun.setDate(mon.getDate() + 6);
+            return { start: formatDate(mon), end: formatDate(sun) };
+        }
+
+        function getMonthRange() {
+            const now = new Date();
+            const start = formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
+            const end = formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+            return { start, end };
+        }
+
+        function getYearRange() {
+            const now = new Date();
+            const start = formatDate(new Date(now.getFullYear(), 0, 1));
+            const end = formatDate(new Date(now.getFullYear(), 11, 31));
+            return { start, end };
+        }
+
+        function getFilterRange() {
+            switch (currentFilter) {
+                case 'today':
+                    return { start: getTodayStr(), end: getTodayStr() };
+                case 'week':
+                    return getWeekRange();
+                case 'month':
+                    return getMonthRange();
+                case 'year':
+                    return getYearRange();
+                case 'all':
+                    return { start: null, end: null };
+                case 'custom':
+                    return { start: customStart || filterStart.value, end: customEnd || filterEnd.value };
+                default:
+                    return { start: null, end: null };
+            }
+        }
+
+        function isInRange(dateStr, range) {
+            if (!range.start && !range.end) return true;
+            if (!range.start) return dateStr <= range.end;
+            if (!range.end) return dateStr >= range.start;
+            return dateStr >= range.start && dateStr <= range.end;
+        }
+
+        function getFilteredRecords() {
+            const range = getFilterRange();
+            return records.filter(r => isInRange(r.date, range));
+        }
+
+        function generateId() {
+            return Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        }
+
+        // ============================================================
+        //  Business Logic
+        // ============================================================
+        function addRecord(type, category, amount, date, note) {
+            const record = {
+                id: generateId(),
+                type,
+                category,
+                amount: parseFloat(amount),
+                date,
+                note: note.trim() || '',
+                createdAt: Date.now()
+            };
+            records.push(record);
+            saveRecords();
+            return record;
+        }
+
+        function deleteRecord(id) {
+            records = records.filter(r => r.id !== id);
+            saveRecords();
+        }
+
+        function getStats(filtered) {
+            let income = 0,
+                expense = 0;
+            filtered.forEach(r => {
+                if (r.type === 'income') income += r.amount;
+                else expense += r.amount;
+            });
+            return { income, expense, profit: income - expense };
+        }
+
+        // ============================================================
+        //  Chart Rendering
+        // ============================================================
+        function renderChart(filtered) {
+            const range = getFilterRange();
+            if (!range.start && !range.end) {
+                // 全部：按月汇总
+                renderChartByMonth(filtered);
+                return;
+            }
+            // 计算天数差
+            const start = parseDate(range.start);
+            const end = parseDate(range.end);
+            const diffDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+            if (diffDays > 45) {
+                renderChartByMonth(filtered);
+            } else {
+                renderChartByDay(filtered, start, end, diffDays);
+            }
+        }
+
+        function renderChartByDay(filtered, start, end, diffDays) {
+            const canvas = chartCanvas;
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            
+            // 获取容器尺寸，如果获取失败则使用默认值
+            const displayWidth = chartWrapper.clientWidth || 600;
+            const displayHeight = chartWrapper.clientHeight || 200;
+
+            canvas.style.width = displayWidth + 'px';
+            canvas.style.height = displayHeight + 'px';
+            canvas.width = displayWidth * dpr;
+            canvas.height = displayHeight * dpr;
+            ctx.scale(dpr, dpr);
+
+            // 生成日期序列
+            const days = [];
+            for (let i = 0; i < diffDays; i++) {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                days.push(formatDate(d));
+            }
+
+            // 汇总每天数据
+            const map = {};
+            filtered.forEach(r => {
+                if (!map[r.date]) map[r.date] = { income: 0, expense: 0 };
+                if (r.type === 'income') map[r.date].income += r.amount;
+                else map[r.date].expense += r.amount;
+            });
+
+            const data = days.map(d => ({
+                date: d,
+                income: map[d] ? map[d].income : 0,
+                expense: map[d] ? map[d].expense : 0
+            }));
+
+            drawBarChart(ctx, displayWidth, displayHeight, data, 'day'); // 传入获取到的尺寸
+        }
+
+        function renderChartByMonth(filtered) {
+            const canvas = chartCanvas;
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            
+            // 获取容器尺寸
+            const displayWidth = chartWrapper.clientWidth || 600;
+            const displayHeight = chartWrapper.clientHeight || 200;
+
+            canvas.style.width = displayWidth + 'px';
+            canvas.style.height = displayHeight + 'px';
+            canvas.width = displayWidth * dpr;
+            canvas.height = displayHeight * dpr;
+            ctx.scale(dpr, dpr);
+
+            // 按年月汇总
+            const map = {};
+            filtered.forEach(r => {
+                const key = r.date.slice(0, 7);
+                if (!map[key]) map[key] = { income: 0, expense: 0 };
+                if (r.type === 'income') map[key].income += r.amount;
+                else map[key].expense += r.amount;
+            });
+
+            const keys = Object.keys(map).sort();
+            const data = keys.map(k => ({
+                date: k,
+                income: map[k].income,
+                expense: map[k].expense
+            }));
+
+            if (data.length === 0) {
+                showChartEmpty(true);
+                return;
+            }
+
+            showChartEmpty(false);
+            drawBarChart(ctx, displayWidth, displayHeight, data, 'month'); // 传入获取到的尺寸
+        }
+
+        function drawBarChart(ctx, W, H, data, mode) {
+            const pad = { top: 20, bottom: 28, left: 10, right: 10 };
+            const chartW = W - pad.left - pad.right;
+            const chartH = H - pad.top - pad.bottom;
+            const count = data.length;
+
+            if (count === 0) {
+                showChartEmpty(true);
+                return;
+            }
+
+            // 计算最大值
+            let maxVal = 0;
+            data.forEach(d => {
+                maxVal = Math.max(maxVal, d.income, d.expense);
+            });
+            maxVal = maxVal * 1.15 || 1;
+
+            const barGap = Math.max(2, chartW / count * 0.2);
+            const barWidth = Math.max(4, (chartW - barGap * (count + 1)) / count);
+            const groupGap = barGap;
+
+            ctx.clearRect(0, 0, W, H);
+
+            // 背景线
+            ctx.strokeStyle = '#E8ECF0';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i <= 4; i++) {
+                const y = pad.top + (chartH / 4) * i;
+                ctx.beginPath();
+                ctx.moveTo(pad.left, y);
+                ctx.lineTo(W - pad.right, y);
+                ctx.stroke();
+                // 刻度值
+                ctx.fillStyle = '#94A3B8';
+                ctx.font = '9px sans-serif';
+                ctx.textAlign = 'right';
+                ctx.fillText(formatCurrency(maxVal * (1 - i / 4)), pad.left - 4, y + 3);
+            }
+
+            // 绘制柱状图
+            data.forEach((d, idx) => {
+                const x = pad.left + groupGap + idx * (barWidth + groupGap);
+                const incomeH = (d.income / maxVal) * chartH;
+                const expenseH = (d.expense / maxVal) * chartH;
+
+                // 支出柱 (红色)
+                if (d.expense > 0) {
+                    const ex = x;
+                    const ey = pad.top + chartH - expenseH;
+                    const ew = barWidth / 2 - 1;
+                    ctx.fillStyle = '#EF4444';
+                    ctx.beginPath();
+                    ctx.roundRect(ex, ey, ew, expenseH, [2, 2, 0, 0]);
+                    ctx.fill();
+                }
+
+                // 收入柱 (绿色)
+                if (d.income > 0) {
+                    const ix = x + barWidth / 2 + 1;
+                    const iy = pad.top + chartH - incomeH;
+                    const iw = barWidth / 2 - 1;
+                    ctx.fillStyle = '#22C55E';
+                    ctx.beginPath();
+                    ctx.roundRect(ix, iy, iw, incomeH, [2, 2, 0, 0]);
+                    ctx.fill();
+                }
+
+                // 日期标签
+                ctx.fillStyle = '#64748B';
+                ctx.font = '9px sans-serif';
+                ctx.textAlign = 'center';
+                let label = d.date;
+                if (mode === 'day') {
+                    label = d.date.slice(5); // MM-DD
+                } else {
+                    label = d.date; // YYYY-MM
+                }
+                // 每隔几个显示，防止重叠
+                const step = Math.max(1, Math.floor(count / 12));
+                if (idx % step === 0 || idx === count - 1) {
+                    ctx.fillText(label, x + barWidth / 2, H - 4);
+                }
+            });
+
+            // 图例
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#22C55E';
+            ctx.fillRect(W - 70, 8, 10, 10);
+            ctx.fillStyle = '#1E293B';
+            ctx.fillText('收入', W - 56, 17);
+            ctx.fillStyle = '#EF4444';
+            ctx.fillRect(W - 28, 8, 10, 10);
+            ctx.fillStyle = '#1E293B';
+            ctx.fillText('支出', W - 14, 17);
+
+            showChartEmpty(false);
+        }
+
+        // roundRect polyfill for Canvas
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
+                const r = Array.isArray(radii) ? radii : [radii, radii, radii, radii];
+                const [tl, tr, br, bl] = r.map(v => Math.min(v || 0, Math.min(w, h) / 2));
+                this.moveTo(x + tl, y);
+                this.lineTo(x + w - tr, y);
+                this.quadraticCurveTo(x + w, y, x + w, y + tr);
+                this.lineTo(x + w, y + h - br);
+                this.quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+                this.lineTo(x + bl, y + h);
+                this.quadraticCurveTo(x, y + h, x, y + h - bl);
+                this.lineTo(x, y + tl);
+                this.quadraticCurveTo(x, y, x + tl, y);
+                this.closePath();
+                return this;
+            };
+        }
+
+        function showChartEmpty(empty) {
+            if (empty) {
+                chartEmpty.style.display = 'flex';
+                chartCanvas.style.display = 'none';
+            } else {
+                chartEmpty.style.display = 'none';
+                chartCanvas.style.display = 'block';
+            }
+        }
+
+        // ============================================================
+        //  UI Update
+        // ============================================================
+        function updateUI() {
+            const filtered = getFilteredRecords();
+            const stats = getStats(filtered); // 修复：将 filteredipse 修正为 filtered
+            const range = getFilterRange();
+
+            // Stats
+            totalIncomeEl.textContent = formatCurrency(stats.income);
+            totalExpenseEl.textContent = formatCurrency(stats.expense);
+            const profitEl = totalProfitEl;
+            profitEl.textContent = formatCurrency(stats.profit);
+            profitEl.className = 'value profit' + (stats.profit < 0 ? ' negative' : '');
+
+            // Counts
+            const total = records.length;
+            recordCountEl.textContent = total + ' 笔记录';
+            listCountEl.textContent = filtered.length + ' 条';
+
+            // Period label
+            if (currentFilter === 'today') chartPeriodLabel.textContent = '今日';
+            else if (currentFilter === 'week') chartPeriodLabel.textContent = '本周';
+            else if (currentFilter === 'month') chartPeriodLabel.textContent = '本月';
+            else if (currentFilter === 'year') chartPeriodLabel.textContent = '本年';
+            else if (currentFilter === 'all') chartPeriodLabel.textContent = '全部';
+            else chartPeriodLabel.textContent = '自定义';
+
+            // Record list
+            renderRecordList(filtered);
+
+            // Chart
+            renderChart(filtered);
+        }
+
+        function renderRecordList(filtered) {
+            if (filtered.length === 0) {
+                recordListEl.innerHTML = `
+                    <div class="record-empty">
+                        <span class="big-icon">📊</span>
+                        还没有记录，快来添加第一笔吧！
+                    </div>
+                `;
+                return;
+            }
+
+            // 按日期倒序
+            const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+
+            let html = '';
+            sorted.forEach(r => {
+                const isIncome = r.type === 'income';
+                const badge = isIncome ? 'income' : 'expense';
+                const icon = isIncome ? '💰' : '💸';
+                const amountClass = isIncome ? 'income' : 'expense';
+                const amtSign = isIncome ? '+' : '-';
+                html += `
+                    <div class="record-item" data-id="${r.id}">
+                        <div class="type-badge ${badge}">${icon}</div>
+                        <div class="info">
+                            <div class="top">
+                                <span class="category">${r.category}</span>
+                                <span class="date">${r.date}</span>
+                            </div>
+                            ${r.note ? `<div class="note">${escapeHtml(r.note)}</div>` : ''}
+                        </div>
+                        <div class="amount ${amountClass}">${amtSign}${formatCurrency(r.amount).replace('￥', '')}</div>
+                        <button class="delete-btn" data-id="${r.id}" title="删除">🗑️</button>
+                    </div>
+                `;
+            });
+            recordListEl.innerHTML = html;
+
+            // 绑定删除事件
+            recordListEl.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = btn.dataset.id;
+                    if (confirm('确定要删除这笔记录吗？')) {
+                        deleteRecord(id);
+                        updateUI();
+                    }
+                });
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================================
+        //  Event Listeners
+        // ============================================================
+        function setupEventListeners() {
+            // Type toggle
+            typeToggle.querySelectorAll('button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    typeToggle.querySelectorAll('button').forEach(b => {
+                        b.className = '';
+                    });
+                    const type = btn.dataset.type;
+                    currentType = type;
+                    if (type === 'income') {
+                        btn.className = 'active-income';
+                        // 切换分类选项
+                        categorySelect.innerHTML = INCOME_CATEGORIES.map(c => `<option value="${c}">${c}</option>`)
+                            .join('');
+                    } else {
+                        btn.className = 'active-expense';
+                        categorySelect.innerHTML = EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`)
+                            .join('');
+                    }
+                });
+            });
+
+            // Form submit
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const type = currentType;
+                const category = categorySelect.value;
+                const amount = amountInput.value.trim();
+                const date = dateInput.value;
+                const note = noteInput.value.trim();
+
+                if (!amount || parseFloat(amount) <= 0) {
+                    alert('请输入有效的金额');
+                    amountInput.focus();
+                    return;
+                }
+                if (!date) {
+                    alert('请选择日期');
+                    dateInput.focus();
+                    return;
+                }
+
+                addRecord(type, category, amount, date, note);
+                // 重置表单
+                amountInput.value = '';
+                noteInput.value = '';
+                dateInput.value = getTodayStr();
+                // 默认选中第一个分类
+                categorySelect.selectedIndex = 0;
+                updateUI();
+                // 滚动到列表
+                document.querySelector('.card:last-child').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+
+            // Filter buttons
+            filterBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    filterBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentFilter = btn.dataset.period;
+                    if (currentFilter === 'custom') {
+                        // 使用自定义日期
+                        currentFilter = 'custom';
+                        customStart = filterStart.value;
+                        customEnd = filterEnd.value;
+                    } else {
+                        // 更新自定义输入框为当前范围
+                        const range = getFilterRange();
+                        if (range.start) filterStart.value = range.start;
+                        if (range.end) filterEnd.value = range.end;
+                    }
+                    updateUI();
+                });
+            });
+
+            // Apply custom filter
+            applyCustom.addEventListener('click', () => {
+                if (!filterStart.value || !filterEnd.value) {
+                    alert('请选择开始和结束日期');
+                    return;
+                }
+                if (filterStart.value > filterEnd.value) {
+                    alert('开始日期不能晚于结束日期');
+                    return;
+                }
+                // 切换到自定义模式
+                filterBtns.forEach(b => b.classList.remove('active'));
+                currentFilter = 'custom';
+                customStart = filterStart.value;
+                customEnd = filterEnd.value;
+                updateUI();
+            });
+
+            // 窗口resize重新绘制图表
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    updateUI();
+                }, 200);
+            });
+        }
+
+        // ============================================================
+        //  Start
+        // ============================================================
+        init();
+    </script>
+
+</body>
+</html>
