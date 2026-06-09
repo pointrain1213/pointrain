@@ -735,7 +735,7 @@
         // ============================================================
         // 配置
         // ============================================================
-        const API_BASE = 'http://localhost:3000/api'; // 后端地址
+        const API_BASE = 'http://47.101.137.158:3000/api'; // 后端地址
 
         // ============================================================
         // 状态
@@ -1301,7 +1301,7 @@
                 statusText.textContent = '已连接';
             } catch (err) {
                 statusDot.className = 'dot offline';
-                statusText.textContent = '连接失败';
+                statusText.textContent = '连接失败!';
                 showToast('⚠️ 后端服务连接失败，请确保 server.js 已启动');
             }
 
