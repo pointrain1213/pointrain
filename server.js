@@ -17,9 +17,9 @@ app.use(express.json());
 const pool = mysql.createPool({
     host: 'mysql3.sqlpub.com',
     port: 3308,
-    user: 'pointdb2',
-    password: 'kULciegEeRcNgbp8',
-    database: 'pointdb2',
+    user: '',
+    password: '',
+    database: '',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0,
